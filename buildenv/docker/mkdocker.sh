@@ -43,6 +43,7 @@ usage() {
   echo "Supported build patterns on this host ($arch):"
 if [ $arch = x86_64 ] ; then
   echo "  bash mkdocker.sh --tag=openj9/cent69 --dist=centos --version=6.9 --build"
+  echo "  bash mkdocker.sh --tag=openj9/rhel610 --dist=rhel --version=6.10 --build"
 fi
 if [ $arch = x86_64 -o $arch = ppc64le ] ; then
   echo "  bash mkdocker.sh --tag=openj9/cent7  --dist=centos --version=7   --build"
@@ -119,13 +120,13 @@ validate_options() {
 
   # Validate the distribution and version.
   case "$dist" in
-    centos)
+    centos | rhel)
       if [ $arch = s390x ] ; then
         echo "CentOS is not supported on $arch" >&2
         exit 1
       fi
       case $version in
-        6.9)
+        6.9 | 6.10)
           if [ $arch = ppc64le ] ; then
             echo "CentOS version 6.9 is not supported on $arch" >&2
             exit 1
@@ -215,18 +216,30 @@ for tag in ${tags[@]} ; do
 done
 fi
   echo ""
+if [ $dist = rhel ] ; then
+  echo "FROM registry.redhat.io/rhel6/rhel"
+fi
 if [ $cuda != no ] ; then
   echo "FROM nvidia/cuda:${cuda}-devel-ubuntu16.04 AS cuda-dev"
   echo ""
 fi
-  echo "FROM $dist:$version"
+if [ $dist != rhel ] ; then
+echo "FROM $dist:$version"
+fi 
 }
-
 install_centos_packages() {
   echo "RUN yum -y update \\"
 if [ $version = 6.9 ] ; then
   echo " && yum -y install https://repo.ius.io/ius-release-el6.rpm \\"
 fi
+if [ $version = 6.10 ] ; then
+  echo " && yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm \\"
+fi
+if [ $dist = rhel ] ; then
+  echo " && subscription-manager register --username <USERNAME> --password <PASSWORD> --auto-attach \\"
+  echo " && subscription-manager repos --enable rhel-6-server-optional-rpms \\"
+fi
+
   echo " && yum -y install \\"
   echo "    alsa-lib-devel \\"
   echo "    automake \\" # required to update make
@@ -287,6 +300,7 @@ fi
   echo "    xz \\"
   echo "    zip \\"
   echo "    zlib-devel \\" # required by git, python
+  echo "    tar.x86_64 \\"
   echo " && yum clean all"
   echo ""
   local autoconf_version=2.69
@@ -310,6 +324,8 @@ fi
   echo " && ln -sf gcc /usr/bin/cc \\"
   echo " && ln -sf g++ /usr/bin/c++ \\"
   echo " && rm -f gcc-7.tar.xz"
+  echo "RUN cc --version"
+  echo "RUN g++ --version"
   echo ""
   local ant_version=1.10.5
   echo "# Install ant."
@@ -467,7 +483,7 @@ install_packages() {
   echo ""
   echo "# Install required OS tools."
   echo ""
-if [ $dist = centos ] ; then
+if [ $dist = centos ] || [ $dist = rhel ] ; then
   install_centos_packages
 else
   install_ubuntu_packages
@@ -496,14 +512,14 @@ fi
   echo " && ln -sf ../local/bin/g++-$gcc_version /usr/bin/g++-7 \\"
   echo " && ln -sf ../local/bin/gcc-$gcc_version /usr/bin/gcc-7"
 fi
-if [ $dist != centos ] ; then
+if [ $dist != centos ] || [ $dist != rhel ]; then
   echo ""
   echo "ENV CC=gcc-7 CXX=g++-7"
 fi
 }
 
 install_cmake() {
-if [ $dist == centos ] ; then
+if [ $dist == centos ] || [ $dist == rhel ]; then
   echo ""
   local cmake_version=3.11
   local cmake_name=cmake-$cmake_version.4
@@ -513,7 +529,10 @@ if [ $dist == centos ] ; then
   echo " && tar -xzf cmake.tar.gz \\"
   echo " && cd $cmake_name \\"
   echo " && export LDFLAGS='-static-libstdc++' \\"
+  echo " && export CC='cc' \\"
+  echo " && export CXX='c++' \\"
   echo " && ./configure \\"
+  echo " && cat /tmp/cmake-3.11.4/Bootstrap.cmk/cmake_bootstrap.log \\"
   echo " && make \\"
   echo " && make install \\"
   echo " && cd .. \\"
@@ -599,9 +618,12 @@ install_python() {
   echo ""
   echo "# Install python."
   echo "RUN cd /tmp \\"
+  echo " && yum -y install libffi-devel \\"
   echo " && $wget_O python.tar.xz https://www.python.org/ftp/python/$python_version/Python-$python_version.tar.xz \\"
   echo " && tar -xJf python.tar.xz \\"
   echo " && cd Python-$python_version \\"
+  echo " && export CC='cc' \\"
+  echo " && export CXX='c++' \\"
   echo " && ./configure --prefix=/usr/local \\"
   echo " && make \\"
   echo " && make install \\"
