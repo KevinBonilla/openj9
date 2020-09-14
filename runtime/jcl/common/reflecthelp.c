@@ -20,7 +20,6 @@
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
 
-
 #include "j2sever.h"
 #include "j9.h"
 #include "j9comp.h"
@@ -120,7 +119,8 @@ getClassAnnotationData(struct J9VMThread *vmThread, struct J9Class *declaringCla
 }
 
 jbyteArray
-getClassTypeAnnotationsAsByteArray(JNIEnv *env, jclass jlClass) {
+getClassTypeAnnotationsAsByteArray(JNIEnv *env, jclass jlClass)
+{
     jobject result = NULL;
     j9object_t clazz = NULL;
     J9VMThread *vmThread = (J9VMThread *) env;
@@ -153,7 +153,8 @@ getFieldAnnotationData(struct J9VMThread *vmThread, struct J9Class *declaringCla
 }
 
 jbyteArray
-getFieldTypeAnnotationsAsByteArray(JNIEnv *env, jobject jlrField) {
+getFieldTypeAnnotationsAsByteArray(JNIEnv *env, jobject jlrField)
+{
     jobject result = NULL;
     j9object_t fieldObject = NULL;
     J9VMThread *vmThread = (J9VMThread *) env;
@@ -830,11 +831,12 @@ createField(struct J9VMThread *vmThread, jfieldID fieldID)
 #if defined(USE_SUN_REFLECT)
 	J9VMJAVALANGREFLECTFIELD_SET_MODIFIERS(vmThread, fieldObject, j9FieldID->field->modifiers & CFR_FIELD_ACCESS_MASK);
 #if JAVA_SPEC_VERSION >= 15
-	/* trust that static final fields and final record class fields will not be modified. */
+	/* trust that static final fields and final record or hidden class fields will not be modified. */
 	if (J9_ARE_ALL_BITS_SET(j9FieldID->field->modifiers, J9AccFinal)) {
 		if (J9_ARE_ALL_BITS_SET(j9FieldID->field->modifiers, J9AccStatic)
-			|| J9ROMCLASS_IS_RECORD(j9FieldID->declaringClass->romClass))
-		{
+			|| J9ROMCLASS_IS_RECORD(j9FieldID->declaringClass->romClass)
+			|| J9ROMCLASS_IS_HIDDEN(j9FieldID->declaringClass->romClass)
+		) {
 			J9VMJAVALANGREFLECTFIELD_SET_TRUSTEDFINAL(vmThread, fieldObject, JNI_TRUE);
 		}
 	}
@@ -1735,7 +1737,8 @@ done:
  * an accessor method will have the same name as the component and take zero parameters.
  */
 static U_8
-isRecordComponentAccessorMethodMatch(J9Method *currentMethod, const char* componentName, U_16 componentNameLength, const char* componentSignature, U_16 componentSignatureLength) {
+isRecordComponentAccessorMethodMatch(J9Method *currentMethod, const char* componentName, U_16 componentNameLength, const char* componentSignature, U_16 componentSignatureLength)
+{
 	J9ROMMethod *romMethod = J9_ROM_METHOD_FROM_RAM_METHOD(currentMethod);
 
 	J9UTF8 *methodNameUtf8 = J9ROMMETHOD_NAME(romMethod);
@@ -1749,12 +1752,10 @@ isRecordComponentAccessorMethodMatch(J9Method *currentMethod, const char* compon
 	/* for a match methodSignature should be "()" + componentSignature */
 	if ((methodNameLength == componentNameLength)
 		&& (methodSignatureLength == (componentSignatureLength + 2))
+		&& (0 == memcmp(methodName, componentName, componentNameLength))
+		&& (0 == memcmp(methodSignature + 2, componentSignature, componentSignatureLength))
 	) {
-		if (0 == strcmp((const char*)methodName, componentName)) {
-			if ((0 == strncmp((const char*)methodSignature + 2, componentSignature, methodSignatureLength - 2))) {
-				return TRUE;
-			}
-		}
+		return TRUE;
 	}
 	return FALSE;
 }

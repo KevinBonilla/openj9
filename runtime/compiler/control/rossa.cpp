@@ -1647,24 +1647,26 @@ onLoadInternal(
          persistentMemory->getPersistentInfo()->setRuntimeInstrumentationRecompilationEnabled(true);
       }
 
-   TR_PersistentCHTable *chtable;
 #if defined(J9VM_OPT_JITSERVER)
-   if (persistentMemory->getPersistentInfo()->getRemoteCompilationMode() == JITServer::SERVER)
-      {
-      chtable = new (PERSISTENT_NEW) JITServerPersistentCHTable(persistentMemory);
-      }
-   else if (persistentMemory->getPersistentInfo()->getRemoteCompilationMode() == JITServer::CLIENT)
-      {
-      chtable = new (PERSISTENT_NEW) JITClientPersistentCHTable(persistentMemory);
-      }
-   else
+   // server-side CH table is initialized per-client
+   if (persistentMemory->getPersistentInfo()->getRemoteCompilationMode() != JITServer::SERVER)
 #endif
       {
-      chtable = new (PERSISTENT_NEW) TR_PersistentCHTable(persistentMemory);
+      TR_PersistentCHTable *chtable;
+#if defined(J9VM_OPT_JITSERVER)
+      if (persistentMemory->getPersistentInfo()->getRemoteCompilationMode() == JITServer::CLIENT)
+         {
+         chtable = new (PERSISTENT_NEW) JITClientPersistentCHTable(persistentMemory);
+         }
+      else
+#endif
+         {
+         chtable = new (PERSISTENT_NEW) TR_PersistentCHTable(persistentMemory);
+         }
+      if (chtable == NULL)
+         return -1;
+      persistentMemory->getPersistentInfo()->setPersistentCHTable(chtable);
       }
-   if (chtable == NULL)
-      return -1;
-   persistentMemory->getPersistentInfo()->setPersistentCHTable(chtable);
 
 #if defined(J9VM_OPT_JITSERVER)
    if (JITServer::CommunicationStream::useSSL())
@@ -1976,7 +1978,7 @@ aboutToBootstrap(J9JavaVM * javaVM, J9JITConfig * jitConfig)
 
    UT_MODULE_LOADED(J9_UTINTERFACE_FROM_VM(javaVM));
    Trc_JIT_VMInitStages_Event1(curThread);
-   Trc_JIT_portableSharedCache_enabled_or_disabled(curThread, TRUE == javaVM->sharedCacheAPI->sharedCachePortable ? 1 : 0);
+   Trc_JIT_portableSharedCache_enabled_or_disabled(curThread, J9_ARE_ANY_BITS_SET(javaVM->extendedRuntimeFlags2, J9_EXTENDED_RUNTIME2_ENABLE_PORTABLE_SHARED_CACHE) ? 1 : 0);
    return 0;
    }
 

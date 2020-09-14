@@ -283,6 +283,7 @@ Java_com_ibm_oti_vm_VM_getClassNameImpl(JNIEnv *env, jclass recv, jclass jlClass
 	UDATA utfLength;
 	UDATA freeUTFData = FALSE;
 	U_8 onStackBuffer[64];
+	bool anonClassName = false;
 
 	vmFuncs->internalEnterVMFromJNI(currentThread);
 
@@ -331,16 +332,17 @@ Java_com_ibm_oti_vm_VM_getClassNameImpl(JNIEnv *env, jclass recv, jclass jlClass
 				utfData[utfLength - 1] = ';';
 			}
 		}
+		anonClassName = J9_ARE_ANY_BITS_SET(leafROMClass->extraModifiers, J9AccClassAnonClass | J9AccClassHidden);
 	} else {
 		J9UTF8 *className = J9ROMCLASS_CLASSNAME(romClass);
 		utfLength = J9UTF8_LENGTH(className);
 		utfData = J9UTF8_DATA(className);
+		anonClassName = J9_ARE_ANY_BITS_SET(romClass->extraModifiers, J9AccClassAnonClass | J9AccClassHidden);
 	}
 
 	if (NULL != utfData) {
 		UDATA flags = J9_STR_INTERN | J9_STR_XLAT;
-
-		if (J9_ARE_ANY_BITS_SET(romClass->extraModifiers, J9AccClassAnonClass | J9AccClassHidden)) {
+		if (anonClassName) {
 			flags |= J9_STR_ANON_CLASS_NAME;
 		}
 		j9object_t classNameObject = vm->memoryManagerFunctions->j9gc_createJavaLangString(currentThread, utfData, utfLength, flags);
@@ -1811,14 +1813,13 @@ Java_java_lang_Class_getNestHostImpl(JNIEnv *env, jobject recv)
 	J9Class *nestHost = clazz->nestHost;
 
 	if (NULL == nestHost) {
-		J9Class *clazzToUse = clazz;
-		if (J9_VISIBILITY_ALLOWED == vmFuncs->loadAndVerifyNestHost(currentThread, clazzToUse, J9_LOOK_NO_THROW)) {
-			nestHost = clazzToUse->nestHost;
+		if (J9_VISIBILITY_ALLOWED == vmFuncs->loadAndVerifyNestHost(currentThread, clazz, J9_LOOK_NO_THROW)) {
+			nestHost = clazz->nestHost;
 		} else {
 			/* If there is a failure loading or accessing the nest host, or if this class or interface does
 			 * not specify a nest, then it is considered to belong to its own nest and this is returned as
 			 * the host */
-			nestHost = clazzToUse;
+			nestHost = clazz;
 		}
 	}
 	j9object_t resultObject = J9VM_J9CLASS_TO_HEAPCLASS(nestHost);

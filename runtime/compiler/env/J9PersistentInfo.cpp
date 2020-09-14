@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2001, 2020 IBM Corp. and others
+ * Copyright (c) 2020, 2020 IBM Corp. and others
  *
  * This program and the accompanying materials are made available under
  * the terms of the Eclipse Public License 2.0 which accompanies this
@@ -19,36 +19,32 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0 OR GPL-2.0 WITH Classpath-exception-2.0 OR LicenseRef-GPL-2.0 WITH Assembly-exception
  *******************************************************************************/
+#include "j9cfg.h" // for J9VM_OPT_JITSERVER
+#include "env/PersistentInfo.hpp"
+#if defined(J9VM_OPT_JITSERVER)
+#include "control/CompilationThread.hpp"
+#include "runtime/JITClientSession.hpp"
+#endif
 
-/*
- * BuildResult.hpp
- */
+TR_PersistentCHTable *
+J9::PersistentInfo::getPersistentCHTable()
+   {
+#if defined(J9VM_OPT_JITSERVER)
+   if (getRemoteCompilationMode() == JITServer::SERVER)
+      {
+      // Get per-client CH table
+      auto clientSession = TR::compInfoPT->getClientData();
+      return clientSession->getCHTable();
+      }
+#endif
+   return _persistentCHTable;
+   }
 
-#ifndef BUILDRESULT_HPP_
-#define BUILDRESULT_HPP_
-
-/* @ddr_namespace: default */
-#include "j9.h"
-
-enum BuildResult {
-	OK = BCT_ERR_NO_ERROR,
-	GenericError = BCT_ERR_GENERIC_ERROR,
-	GenericErrorCustomMsg = BCT_ERR_GENERIC_ERROR_CUSTOM_MSG,
-	OutOfROM = BCT_ERR_OUT_OF_ROM,
-	ClassRead = BCT_ERR_CLASS_READ,
-	BytecodeTranslationFailed = BCT_ERR_BYTECODE_TRANSLATION_FAILED,
-	StackMapFailed = BCT_ERR_STACK_MAP_FAILED,
-	InvalidBytecode = BCT_ERR_INVALID_BYTECODE,
-	OutOfMemory = BCT_ERR_OUT_OF_MEMORY,
-	VerifyErrorInlining = BCT_ERR_VERIFY_ERROR_INLINING,
-	NeedWideBranches = BCT_ERR_NEED_WIDE_BRANCHES,
-	UnknownAnnotation = BCT_ERR_UNKNOWN_ANNOTATION,
-	ClassNameMismatch = BCT_ERR_CLASS_NAME_MISMATCH,
-	IllegalPackageName = BCT_ERR_ILLEGAL_PACKAGE_NAME,
-	InvalidAnnotation = BCT_ERR_INVALID_ANNOTATION,
-	LineNumberTableDecompressFailed = BCT_ERR_LINE_NUMBER_TABLE_DECOMPRESS_FAILED,
-	InvalidBytecodeSize = BCT_ERR_INVALID_BYTECODE_SIZE,
-	InvalidClassType = BCT_ERR_INVALID_CLASS_TYPE,
-};
-
-#endif /* BUILDRESULT_HPP_ */
+void
+J9::PersistentInfo::setPersistentCHTable(TR_PersistentCHTable *table)
+   {
+#if defined(J9VM_OPT_JITSERVER)
+   TR_ASSERT_FATAL(getRemoteCompilationMode() != JITServer::SERVER, "server-side CH table must be set per-client in ClientSessionData");
+#endif
+   _persistentCHTable = table;
+   }
