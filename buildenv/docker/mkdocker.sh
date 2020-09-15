@@ -62,7 +62,8 @@ dist=unspecified
 tags=()
 user=jenkins
 version=unspecified
-
+username=
+password=
 # Frequently used commands.
 wget_O="wget --progress=dot:mega -O"
 
@@ -225,7 +226,7 @@ if [ $cuda != no ] ; then
 fi
 if [ $dist != rhel ] ; then
 echo "FROM $dist:$version"
-fi 
+fi
 }
 install_centos_packages() {
   echo "RUN yum -y update \\"
@@ -236,7 +237,9 @@ if [ $version = 6.10 ] ; then
   echo " && yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-6.noarch.rpm \\"
 fi
 if [ $dist = rhel ] ; then
-  echo " && subscription-manager register --username <USERNAME> --password <PASSWORD> --auto-attach \\"
+  read -p "You are required to have a redhat registry license before running this container, please enter username: " username
+  read -p -s "Please enter password now: " password
+  echo " && subscription-manager register --username ${username} --password ${password} --auto-attach \\"
   echo " && subscription-manager repos --enable rhel-6-server-optional-rpms \\"
 fi
 
